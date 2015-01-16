@@ -3,6 +3,12 @@ namespace sofa
 open System
 
 open FSharp.Data
+open Newtonsoft.Json
+
+type IdAndRev = {
+    _id: string
+    _rev: string
+}
 
 [<AutoOpen>]
 module Convenience = 
@@ -13,6 +19,11 @@ module Convenience =
                         |> Seq.filter (not << String.IsNullOrWhiteSpace)
                         |> Seq.toList
                     )
+
+    let defaultSerialzer str: (string * string * 'a) =
+        let model = JsonConvert.DeserializeObject<'a>(str)
+        let idandrev = JsonConvert.DeserializeObject<IdAndRev>(str)
+        (idandrev._id, idandrev._rev, model)
 
 type Database = 
     {
@@ -31,10 +42,14 @@ type SeatedSofa<'id, 'obj> =
 
 module Sofa =
     /// get a resource from the db
-    let get (db:Database) ser http id = 
+    let get<'a> (db:Database) (ser: string -> string * string * 'a)  http id : Async<(string * string * 'a) option> = 
         async {
             let! res = http (sprintf "%s%O" (db.NormalizeUrl ()) id) 
-            return res |> ser
+            match res with 
+            | Some x -> 
+                let body, headers = x
+                return Some (body |> ser)
+            | None -> return None
         }
     
     let head (db:Database) http id = 
@@ -42,15 +57,34 @@ module Sofa =
             return! http (sprintf "%s%O" (db.NormalizeUrl ()) id)
         }
                  
-    let build db ser = 
+    let build<'a> db = 
         let headReq url =
             async { 
                 let! res = Http.AsyncRequest (url, httpMethod = "HEAD")
                 return res.Headers |> mapHeaders
             }
 
+        let getReq url = 
+            async {
+                let! res = Http.AsyncRequest url
+
+                return 
+                    match res.StatusCode with 
+                    | 200 | 304 -> 
+                        let body = 
+                            match res.Body with
+                            | HttpResponseBody.Text x -> x
+                            | _ -> failwith "expecting a textbased response"
+
+                        Some (body, res.Headers |> mapHeaders)
+                    | 404 -> None
+                    | 401 -> failwith "Read privilege required"
+                    | 400 -> failwith "Bad request"
+                    | _ -> failwith "Something else happend that shouldn't have"
+            }
+        
         {
-            get = get db ser Http.AsyncRequestString
+            get = get db defaultSerialzer getReq
             head = head db headReq
         }
 

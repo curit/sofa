@@ -9,5 +9,6 @@ nuget FsUnit.xUnit
 nuget xunit
 nuget xunit.runner.visualstudio
 nuget xunit.runners
+nuget Newtonsoft.Json
 
 github fsharp/FAKE modules/Octokit/Octokit.fsx

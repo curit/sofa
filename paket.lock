@@ -15,6 +15,7 @@ NUGET
     Microsoft.Net.Http (2.2.28)
       Microsoft.Bcl (>= 1.1.9)
       Microsoft.Bcl.Build (>= 1.0.14)
+    Newtonsoft.Json (6.0.8)
     NuGet.CommandLine (2.8.3)
     Octokit (0.6.2)
       Microsoft.Net.Http

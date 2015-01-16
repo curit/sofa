@@ -4,21 +4,31 @@ open sofa
 open Xunit
 open FsUnit.Xunit
 
-type HttpResult = {
-    Url: string
-    Result: string
-}
+type Future<'a> () =
+    let mutable _value: 'a option = None
+
+    member x.Resolve value =
+        if _value.IsSome then failwith "can only resolve once"
+        _value <- Some value
+
+    member x.IsResolved with get () = _value.IsSome
+
+    member x.Value 
+        with get () = 
+            match _value with 
+            | Some v -> v
+            | None -> failwith "hasn't resolved yet"
 
 let testHttpGet ret = 
+    let future = Future<string>()
+
     let returnResult str = 
         async {
-            return { 
-                Url = str
-                Result = ret
-            }
+            future.Resolve str
+            return Some (ret, [ ("X-Request-Url", [str]) ] |> Map.ofList) 
         }
 
-    returnResult
+    (returnResult, future)
 
 let testHttpHead ret = 
     let returnResult str = 
@@ -30,6 +40,11 @@ let testHttpHead ret =
         }
 
     returnResult
+
+type TestData = 
+    {
+        value: string
+    }
 
 [<Fact>]
 let ``basic head test`` () =
@@ -50,14 +65,18 @@ let ``basic get test`` () =
     async {
         // Given
         let db:Database = { Url = "test://bla" }
-        let http = testHttpGet "blaat"
+        let http, urlFuture = testHttpGet "{ \"value\": \"blaat\", \"_id\": 5, \"_rev\": \"5-1\" }" 
 
         // When
-        let! result = Sofa.get db (fun a -> a) http 5
+        let! res = Sofa.get<TestData> db defaultSerialzer http 5
+        let id, rev, body = res.Value
 
         // Then
-        result.Result |> should equal "blaat"
-        result.Url |> should equal "test://bla/5"
+        id |> should equal "5"
+        rev |> should equal"5-1"
+        body.value |> should equal "blaat"
+        urlFuture.IsResolved |> should be True
+        urlFuture.Value |> should equal "test://bla/5"
     } |> Async.RunSynchronously
 
 [<Fact>]
