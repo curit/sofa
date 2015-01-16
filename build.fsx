@@ -123,11 +123,11 @@ Target "Build" (fun _ ->
 
 Target "RunTests" (fun _ ->
     !! testAssemblies
-    |> NUnit (fun p ->
+    |> xUnit (fun p ->
         { p with
-            DisableShadowCopy = true
+            ToolPath = "./packages/xunit.runners/tools/xunit.console.clr4.exe"
             TimeOut = TimeSpan.FromMinutes 20.
-            OutputFile = "TestResults.xml" })
+            OutputDir = "./" })
 )
 
 #if MONO
