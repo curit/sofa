@@ -7,5 +7,7 @@ nuget SourceLink.Fake
 nuget FSharp.Data
 nuget FsUnit.xUnit
 nuget xunit
+nuget xunit.runner.visualstudio
+nuget xunit.runners
 
 github fsharp/FAKE modules/Octokit/Octokit.fsx

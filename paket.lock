@@ -20,6 +20,8 @@ NUGET
       Microsoft.Net.Http
     SourceLink.Fake (0.4.2)
     xunit (1.9.2) - net20, >= net40, >= net45
+    xunit.runner.visualstudio (0.99.8)
+    xunit.runners (1.9.2)
     Zlib.Portable (1.10.0)
 GITHUB
   remote: fsharp/FAKE
