@@ -10,6 +10,12 @@ type IdAndRev = {
     _rev: string
 }
 
+type PutResponse<'id> = {
+    id: 'id
+    rev: string
+    ok: bool
+}
+
 [<AutoOpen>]
 module Convenience = 
     let mapHeaders headers = 
@@ -20,10 +26,16 @@ module Convenience =
                         |> Seq.toList
                     )
 
-    let defaultSerialzer str: (string * string * 'a) =
+    let defaultDeserialzer str: (string * string * 'a) =
         let model = JsonConvert.DeserializeObject<'a>(str)
         let idandrev = JsonConvert.DeserializeObject<IdAndRev>(str)
         (idandrev._id, idandrev._rev, model)
+
+    let putResultDeserializer str = 
+        JsonConvert.DeserializeObject<PutResponse<'id>>(str)
+
+    let defaultSerializer obj = 
+        JsonConvert.SerializeObject obj
 
 type Database = 
     {
@@ -38,6 +50,7 @@ type SeatedSofa<'id, 'obj> =
     {
         get: ('id -> 'obj Async)
         head: ('id -> Map<string, string list> Async)
+        put: ('id * string option -> 'obj -> ('id * string) option Async)
     } 
 
 module Sofa =
@@ -55,6 +68,19 @@ module Sofa =
     let head (db:Database) http id = 
         async {
             return! http (sprintf "%s%O" (db.NormalizeUrl ()) id)
+        }
+
+    let put<'a> (db:Database) (ser: 'a -> string) http (id, rev:string option) (model:'a) =
+        async {
+            let! resp = http (sprintf "%s%O" (db.NormalizeUrl()) id) (ser model)
+            return 
+                match resp with 
+                | Some x -> 
+                    let putResult, headers = x 
+                    let putResult = putResult |> putResultDeserializer
+
+                    Some (putResult.id, putResult.rev)
+                | None -> None
         }
                  
     let build<'a> db = 
@@ -82,10 +108,29 @@ module Sofa =
                     | 400 -> failwith "Bad request"
                     | _ -> failwith "Something else happend that shouldn't have"
             }
+
+        let putReq url model = 
+            async {
+                let! res = Http.AsyncRequest (url, headers = ["Content-Type", "application/json"], body = TextRequest(model))
+                return 
+                    match res.StatusCode with
+                    | 201 | 202 -> 
+                        let body = 
+                            match res.Body with 
+                            | HttpResponseBody.Text x -> x
+                            | _ -> failwith "expecting a textbased response"
+                        Some (body, res.Headers |> mapHeaders)
+                    | 404 -> failwith "Doc doesn't exist"
+                    | 401 -> failwith "Read privilege required"
+                    | 400 -> failwith "Bad request"
+                    | 409 -> failwith "Document with the specified ID already exists or specified revision is not latest for target document"
+                    | _ -> failwith "Something else happend that shouldn't have"
+            }
         
         {
-            get = get db defaultSerialzer getReq
+            get = get db defaultDeserialzer getReq
             head = head db headReq
+            put = put db defaultSerializer putReq 
         }
 
     
