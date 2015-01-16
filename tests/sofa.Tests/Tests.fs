@@ -1,9 +1,9 @@
 module sofa.Tests
 
 open sofa
-open NUnit.Framework
+open xunit
 
-[<Test>]
+[<Fact>]
 let ``hello returns 42`` () =
   let result = Library.hello 42
   printfn "%i" result
