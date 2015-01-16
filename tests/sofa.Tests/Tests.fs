@@ -102,7 +102,7 @@ let ``basic put test`` () =
         // When
         let! res = Sofa.put db defaultSerializer http ("5", None) { value = "blaat"}
         let id, rev = res.Value
-        s
+        
         // Then
         id |> should equal "5"
         rev |> should equal "1-5"
