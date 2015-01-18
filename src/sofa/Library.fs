@@ -10,8 +10,8 @@ type IdAndRev = {
     _rev: string
 }
 
-type PutResponse<'id> = {
-    id: 'id
+type Response = {
+    id: string
     rev: string
     ok: bool
 }
@@ -31,8 +31,8 @@ module Convenience =
         let idandrev = JsonConvert.DeserializeObject<IdAndRev>(str)
         (idandrev._id, idandrev._rev, model)
 
-    let putResultDeserializer str = 
-        JsonConvert.DeserializeObject<PutResponse<'id>>(str)
+    let resultDeserializer str = 
+        JsonConvert.DeserializeObject<Response>(str)
 
     let defaultSerializer obj = 
         JsonConvert.SerializeObject obj
@@ -46,11 +46,12 @@ type Database =
         | '/' -> x.Url
         | _ -> x.Url + "/"
 
-type SeatedSofa<'id, 'obj> = 
+type SeatedSofa<'obj> = 
     {
-        get: ('id -> (string * string * 'obj) option Async)
-        head: ('id -> (string * Map<string, string list>) option Async)
-        put: ('id * string option -> 'obj -> ('id * string) option Async)
+        get: (string -> (string * string * 'obj) option Async)
+        head: (string -> (string * Map<string, string list>) option Async)
+        put: (string * string option -> 'obj -> (string * string) option Async)
+        delete: (string * string -> (string * string) option Async)
     } 
 
 module Sofa =
@@ -81,9 +82,22 @@ module Sofa =
                 match resp with 
                 | Some x -> 
                     let putResult, headers = x 
-                    let putResult = putResult |> putResultDeserializer
+                    let putResult = putResult |> resultDeserializer
 
                     Some (putResult.id, putResult.rev)
+                | None -> None
+        }
+
+    let delete (db:Database) http (id, rev) =
+        async {
+            let! resp = http (sprintf "%s%O" (db.NormalizeUrl ()) id) rev
+            return 
+                match resp with 
+                | Some x -> 
+                    let deleteResult, headers = x
+                    let deleteResult = deleteResult |> resultDeserializer
+
+                    Some (deleteResult.id, deleteResult.rev)
                 | None -> None
         }
                  
@@ -118,6 +132,25 @@ module Sofa =
                     | _ -> failwith "Something else happend that shouldn't have"
             }
 
+        let deleteReq url rev =
+            async {
+                let! res = Http.AsyncRequest (url, query = [("rev", rev)], httpMethod = "DELETE")
+                return 
+                    match res.StatusCode with
+                    | 200 | 202 ->
+                        let body = 
+                            match res.Body with
+                            | HttpResponseBody.Text x -> x
+                            | _ -> failwith "expecting a textbased response"
+
+                        Some (body, res.Headers |> mapHeaders)
+                    | 404 -> None
+                    | 401 -> failwith "Write privilege required"
+                    | 400 -> failwith "Bad request"
+                    | 409 -> failwith "Specified revision is not the latest for target document"
+                    | _ -> failwith "Something else happend that shouldn't have"
+            }
+
         let putReq url model = 
             async {
                 let! res = Http.AsyncRequest (url, headers = ["Content-Type", "application/json"], body = TextRequest(model))
@@ -129,7 +162,7 @@ module Sofa =
                             | HttpResponseBody.Text x -> x
                             | _ -> failwith "expecting a textbased response"
                         Some (body, res.Headers |> mapHeaders)
-                    | 404 -> failwith "Doc doesn't exist"
+                    | 404 -> failwith "Database doesn't exist"
                     | 401 -> failwith "Write privilege required"
                     | 400 -> failwith "Bad request"
                     | 409 -> failwith "Document with the specified ID already exists or specified revision is not latest for target document"
@@ -140,6 +173,7 @@ module Sofa =
             get = get db defaultDeserialzer getReq
             head = head db headReq
             put = put db defaultSerializer putReq 
+            delete = delete db deleteReq
         }
 
     
