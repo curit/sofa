@@ -8,23 +8,20 @@ type Future<'a> () =
     let mutable _value: 'a option = None
 
     member x.Resolve value =
-        if _value.IsSome then failwith "can only resolve once"
-        _value <- Some value
-
-    member x.IsResolved with get () = _value.IsSome
-
-    member x.Value 
-        with get () = 
-            match _value with 
-            | Some v -> v
-            | None -> failwith "hasn't resolved yet"
+        match _value with
+        | Some _ -> false
+        | None -> 
+            _value <- Some value
+            true
+            
+    member x.Value with get () = _value
 
 let testHttpGet ret = 
     let future = Future<string>()
 
     let returnResult str = 
         async {
-            future.Resolve str
+            future.Resolve str |> ignore
             return Some (ret, [ ("X-Request-Url", [str]) ] |> Map.ofList) 
         }
 
@@ -47,8 +44,8 @@ let testHttpPut<'a> ret =
 
     let returnResult url model =
         async {
-            urlFuture.Resolve url
-            modelFuture.Resolve model
+            urlFuture.Resolve url |> ignore
+            modelFuture.Resolve model |> ignore
             return Some (ret, [ ("X-Request-Url", [url]) ] |> Map.ofList) 
         }
 
@@ -88,8 +85,7 @@ let ``basic get test`` () =
         id |> should equal "5"
         rev |> should equal"5-1"
         body.value |> should equal "blaat"
-        urlFuture.IsResolved |> should be True
-        urlFuture.Value |> should equal "test://bla/5"
+        urlFuture.Value |> should equal (Some "test://bla/5")
     } |> Async.RunSynchronously
 
 [<Fact>]
@@ -106,10 +102,8 @@ let ``basic put test`` () =
         // Then
         id |> should equal "5"
         rev |> should equal "1-5"
-        urlFuture.IsResolved |> should be True
-        urlFuture.Value |> should equal "test://peer/5"
-        modelFuture.IsResolved |> should be True
-        modelFuture.Value |> should equal "{\"value\":\"blaat\"}"
+        urlFuture.Value |> should equal (Some "test://peer/5")
+        modelFuture.Value |> should equal (Some "{\"value\":\"blaat\"}")
     } |> Async.RunSynchronously
 
 [<Fact>]
