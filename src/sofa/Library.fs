@@ -49,7 +49,7 @@ type Database =
 type SeatedSofa<'id, 'obj> = 
     {
         get: ('id -> (string * string * 'obj) option Async)
-        head: ('id -> Map<string, string list> Async)
+        head: ('id -> (string * Map<string, string list>) option Async)
         put: ('id * string option -> 'obj -> ('id * string) option Async)
     } 
 
@@ -65,9 +65,13 @@ module Sofa =
             | None -> return None
         }
     
-    let head (db:Database) http id = 
+    let head (db:Database) (http: string -> Map<string, string list> option Async) id = 
         async {
-            return! http (sprintf "%s%O" (db.NormalizeUrl ()) id)
+            let! headers = http (sprintf "%s%O" (db.NormalizeUrl ()) id)
+            return 
+                match headers with 
+                | Some h -> Some (h.["E-Tag"] |> List.head, h)
+                | None -> None
         }
 
     let put<'a> (db:Database) (ser: 'a -> string) http (id, rev:string option) (model:'a) =
@@ -87,7 +91,12 @@ module Sofa =
         let headReq url =
             async { 
                 let! res = Http.AsyncRequest (url, httpMethod = "HEAD")
-                return res.Headers |> mapHeaders
+                return 
+                    match res.StatusCode with 
+                    | 200 | 304 -> Some (res.Headers  |> mapHeaders)
+                    | 401 -> failwith "Read privilege required"
+                    | 404 -> None
+                    | _ -> failwith "Something else happend that shouldn't have"
             }
 
         let getReq url = 
@@ -121,7 +130,7 @@ module Sofa =
                             | _ -> failwith "expecting a textbased response"
                         Some (body, res.Headers |> mapHeaders)
                     | 404 -> failwith "Doc doesn't exist"
-                    | 401 -> failwith "Read privilege required"
+                    | 401 -> failwith "Write privilege required"
                     | 400 -> failwith "Bad request"
                     | 409 -> failwith "Document with the specified ID already exists or specified revision is not latest for target document"
                     | _ -> failwith "Something else happend that shouldn't have"

@@ -30,10 +30,10 @@ let testHttpGet ret =
 let testHttpHead ret = 
     let returnResult str = 
         async {
-            return 
+            return
                 [
-                    ("_rev", ["1-" + ret])
-                ] |> Map.ofList
+                    ("E-Tag", ["1-" + ret])
+                ] |> Map.ofList |> Some
         }
 
     returnResult
@@ -61,13 +61,16 @@ let ``basic head test`` () =
     async {
         // Given
         let db:Database = { Url = "test://bla" }
-        let http = testHttpHead "blaat"
+        let http = testHttpHead "5"
 
         // When
-        let! result = Sofa.head db http 5 
+        let! res = Sofa.head db http 5 
+        let rev, headers = res.Value
+       
 
         // Then
-        (result |> Map.toList).[0] |> should equal ("_rev", ["1-blaat"])
+        rev |> should equal "1-5"
+        (headers |> Map.toList).[0] |> should equal ("E-Tag", ["1-5"])
     } |> Async.RunSynchronously
 
 [<Fact>]
