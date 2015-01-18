@@ -48,7 +48,7 @@ type Database =
 
 type SeatedSofa<'id, 'obj> = 
     {
-        get: ('id -> 'obj Async)
+        get: ('id -> (string * string * 'obj) option Async)
         head: ('id -> Map<string, string list> Async)
         put: ('id * string option -> 'obj -> ('id * string) option Async)
     } 

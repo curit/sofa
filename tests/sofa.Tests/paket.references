@@ -1,4 +1,4 @@
-FsUnit.xUnit
 xunit
 xunit.runner.visualstudio
 Newtonsoft.Json
+FsUnit.xUnit

@@ -5,10 +5,10 @@ nuget Nuget.CommandLine
 nuget FAKE
 nuget SourceLink.Fake
 nuget FSharp.Data
-nuget FsUnit.xUnit
 nuget xunit
 nuget xunit.runner.visualstudio
 nuget xunit.runners
 nuget Newtonsoft.Json
+nuget FsUnit.xUnit
 
 github fsharp/FAKE modules/Octokit/Octokit.fsx
