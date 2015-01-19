@@ -10,6 +10,10 @@ type IdAndRev = {
     _rev: string
 }
 
+type Id = { _id: string }
+
+type Rev = { _rev: string }
+
 type Response = {
     id: string
     rev: string
@@ -18,6 +22,8 @@ type Response = {
 
 [<AutoOpen>]
 module Convenience = 
+    open Newtonsoft.Json.Linq
+
     let mapHeaders headers = 
         headers |> Map.map (fun k (v:string) -> 
                         v.Split([|","|], StringSplitOptions.RemoveEmptyEntries) 
@@ -34,8 +40,15 @@ module Convenience =
     let resultDeserializer str = 
         JsonConvert.DeserializeObject<Response>(str)
 
-    let defaultSerializer obj = 
-        JsonConvert.SerializeObject obj
+    let defaultSerializer (id, rev) obj = 
+        let model = JObject.Parse (JsonConvert.SerializeObject obj)
+        match rev with 
+        | Some x -> 
+            let rev = JObject.Parse (JsonConvert.SerializeObject { _rev = x})
+            rev.Merge(model)
+            rev.ToString(Formatting.None)
+        | None -> 
+            model.ToString(Formatting.None)
 
 type Database = 
     {
@@ -75,9 +88,10 @@ module Sofa =
                 | None -> None
         }
 
-    let put<'a> (db:Database) (ser: 'a -> string) http (id, rev:string option) (model:'a) =
+    let put<'a> (db:Database) (ser: (string * string option) -> 'a -> string) http (id, rev:string option) (model:'a) =
         async {
-            let! resp = http (sprintf "%s%O" (db.NormalizeUrl()) id) (ser model)
+            
+            let! resp = http (sprintf "%s%O" (db.NormalizeUrl()) id) (ser (id, rev) model)
             return 
                 match resp with 
                 | Some x -> 
@@ -134,7 +148,7 @@ module Sofa =
 
         let deleteReq url rev =
             async {
-                let! res = Http.AsyncRequest (url, query = [("rev", rev)], httpMethod = "DELETE")
+                let! res = Http.AsyncRequest (url, query = ["rev", rev], httpMethod = "DELETE")
                 return 
                     match res.StatusCode with
                     | 200 | 202 ->

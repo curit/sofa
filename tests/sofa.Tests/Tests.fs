@@ -22,7 +22,7 @@ let testHttpGet ret =
     let returnResult str = 
         async {
             future.Resolve str |> ignore
-            return Some (ret, [ ("X-Request-Url", [str]) ] |> Map.ofList) 
+            return Some (ret, Map.empty) 
         }
 
     (returnResult, future)
@@ -44,7 +44,7 @@ let testHttpDelete ret =
     let returnResult url rev =
         async {
             urlFuture.Resolve (url + "?rev=" + rev) |> ignore
-            return Some (ret, [ ("", [""] ) ] |> Map.ofList)
+            return Some (ret, Map.empty)
         }
 
     (returnResult, urlFuture)
@@ -57,7 +57,7 @@ let testHttpPut<'a> ret =
         async {
             urlFuture.Resolve url |> ignore
             modelFuture.Resolve model |> ignore
-            return Some (ret, [ ("X-Request-Url", [url]) ] |> Map.ofList) 
+            return Some (ret, Map.empty) 
         }
 
     (returnResult, urlFuture, modelFuture)
@@ -119,6 +119,25 @@ let ``basic put test`` () =
         urlFuture.Value |> should equal (Some "test://peer/5")
         modelFuture.Value |> should equal (Some "{\"value\":\"blaat\"}")
     } |> Async.RunSynchronously
+
+[<Fact>]
+let ``basic put test with id and rev`` () =
+    async {
+        // Given
+        let db = { Url= "test://peer" }
+        let http, urlFuture, modelFuture = testHttpPut "{ \"id\": \"5\", \"rev\": \"1-5\", \"ok\": true }"
+
+        // When
+        let! res = Sofa.put db defaultSerializer http ("5", Some "2-5") { value = "blaat"}
+        let id, rev = res.Value
+        
+        // Then
+        id |> should equal "5"
+        rev |> should equal "1-5"
+        urlFuture.Value |> should equal (Some "test://peer/5")
+        modelFuture.Value |> should equal (Some "{\"_rev\":\"2-5\",\"value\":\"blaat\"}")
+    } |> Async.RunSynchronously
+
 
 [<Fact>]
 let ``basic delete test`` () =
