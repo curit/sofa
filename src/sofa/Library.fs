@@ -52,6 +52,7 @@ module Convenience =
 
 type Database = 
     {
+        Id: string
         Url: string
     }
     member x.NormalizeUrl () =
@@ -59,12 +60,76 @@ type Database =
         | '/' -> x.Url
         | _ -> x.Url + "/"
 
+type Server = 
+    {
+        all: unit -> Database seq Async
+        get: string -> Database option Async
+        head: string -> bool Async
+        put: string -> Database option Async
+        delete: string -> bool Async
+    }
+    static member build (url:string) =
+        let url = 
+            match url.[url.Length - 1] with 
+            | '/' -> url
+            | _ -> url + "/"
+        
+        {
+            all = fun () -> 
+                async { 
+                    let! res = Http.AsyncRequest(url + "_all_dbs", silentHttpErrors = true)
+                    return 
+                        match res.Body with
+                        | HttpResponseBody.Text x -> 
+                            JsonConvert.DeserializeObject<seq<string>>(x) 
+                            |> Seq.map (fun s -> { Id = s; Url = url + s + "/" })
+                        | _ -> Seq.empty
+                }
+            get = fun s -> 
+                async {
+                    let! res = Http.AsyncRequest(url + s)
+                    return
+                        match res.StatusCode with
+                        | 200 -> Some { Id = s; Url = url + s + "/" }
+                        | _ -> None
+                }
+            head = fun s -> 
+               async {
+                    let! res = Http.AsyncRequest(url + s, httpMethod = "HEAD", silentHttpErrors = true)
+                    return
+                        match res.StatusCode with
+                        | 200 -> true
+                        | _ -> false
+                }
+            put = fun s -> 
+                async {
+                    let! res = Http.AsyncRequest(url + s, httpMethod = "PUT")
+                    return 
+                        match res.StatusCode with 
+                        | 201 | 412 -> Some { Id = s; Url = url + s + "/" }
+                        | 401 -> failwith "CouchDB Server Administrator privileges required"
+                        | 400 -> failwith "Invalid database name"
+                        | _ -> failwith "Something else happend that shouldn't have"
+                }
+            delete = fun s -> 
+                async {
+                    let! res = Http.AsyncRequest(url + s, httpMethod = "DELETE")
+                    return 
+                        match res.StatusCode with 
+                        | 200 | 404 -> true
+                        | 401 -> failwith "CouchDB Server Administrator privileges required"
+                        | 400 -> failwith "Invalid database name"
+                        | _ -> failwith "Something else happend that shouldn't have"
+                }
+        }
+
 type SeatedSofa<'obj> = 
     {
         get: (string -> (string * string * 'obj) option Async)
         head: (string -> (string * Map<string, string list>) option Async)
         put: (string * string option -> 'obj -> (string * string) option Async)
         delete: (string * string -> (string * string) option Async)
+        post: ('obj -> (string * string) option Async)
     } 
 
 module Sofa =
@@ -92,6 +157,20 @@ module Sofa =
         async {
             
             let! resp = http (sprintf "%s%O" (db.NormalizeUrl()) id) (ser (id, rev) model)
+            return 
+                match resp with 
+                | Some x -> 
+                    let putResult, headers = x 
+                    let putResult = putResult |> resultDeserializer
+
+                    Some (putResult.id, putResult.rev)
+                | None -> None
+        }
+
+    let post<'a> (db:Database) (ser: 'a -> string) http (model:'a) =
+        async {
+            
+            let! resp = http (sprintf "%s" (db.NormalizeUrl())) (ser model)
             return 
                 match resp with 
                 | Some x -> 
@@ -167,7 +246,7 @@ module Sofa =
 
         let putReq url model = 
             async {
-                let! res = Http.AsyncRequest (url, headers = ["Content-Type", "application/json"], body = TextRequest(model))
+                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "PUT")
                 return 
                     match res.StatusCode with
                     | 201 | 202 -> 
@@ -182,12 +261,32 @@ module Sofa =
                     | 409 -> failwith "Document with the specified ID already exists or specified revision is not latest for target document"
                     | _ -> failwith "Something else happend that shouldn't have"
             }
+
+        let postReq url model = 
+            async {
+                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "POST")
+                return 
+                    match res.StatusCode with
+                    | 201 | 202 -> 
+                        let body = 
+                            match res.Body with
+                            | HttpResponseBody.Text x -> x
+                            | _ -> failwith "expecting a textbased response"
+                    
+                        Some (body, res.Headers |> mapHeaders)
+                    | 404 -> failwith "Database doesn't exist"
+                    | 401 -> failwith "Write privilege required"
+                    | 400 -> failwith "Bad request"
+                    | 409 -> failwith "Document with the specified ID already exists or specified revision is not latest for target document"
+                    | _ -> failwith "Something else happend that shouldn't have"
+            }
         
         {
             get = get db defaultDeserialzer getReq
             head = head db headReq
             put = put db defaultSerializer putReq 
             delete = delete db deleteReq
+            post = post db JsonConvert.SerializeObject postReq
         }
 
     

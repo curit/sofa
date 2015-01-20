@@ -1,8 +1,9 @@
-module sofa.Tests
+module Tests
 
 open sofa
 open Xunit
 open FsUnit.Xunit
+open Newtonsoft.Json
 
 type Future<'a> () =
     let mutable _value: 'a option = None
@@ -17,7 +18,7 @@ type Future<'a> () =
     member x.Value with get () = _value
 
 let testHttpGet ret = 
-    let future = Future<string>()
+    let future = Future ()
 
     let returnResult str = 
         async {
@@ -39,7 +40,7 @@ let testHttpHead ret =
     returnResult
 
 let testHttpDelete ret =
-    let urlFuture = Future<string> ()
+    let urlFuture = Future ()
 
     let returnResult url rev =
         async {
@@ -50,7 +51,7 @@ let testHttpDelete ret =
     (returnResult, urlFuture)
 
 let testHttpPut<'a> ret =
-    let urlFuture = Future<string> ()
+    let urlFuture = Future ()
     let modelFuture = Future<'a> ()
 
     let returnResult url model =
@@ -58,6 +59,19 @@ let testHttpPut<'a> ret =
             urlFuture.Resolve url |> ignore
             modelFuture.Resolve model |> ignore
             return Some (ret, Map.empty) 
+        }
+
+    (returnResult, urlFuture, modelFuture)
+
+let testHttpPost ret =
+    let urlFuture = Future ()
+    let modelFuture = Future<'a> ()
+
+    let returnResult url model = 
+        async {
+            modelFuture.Resolve model |> ignore
+            urlFuture.Resolve url |> ignore
+            return Some(ret, Map.empty)
         }
 
     (returnResult, urlFuture, modelFuture)
@@ -71,13 +85,12 @@ type TestData =
 let ``basic head test`` () =
     async {
         // Given
-        let db:Database = { Url = "test://bla" }
+        let db:Database = { Id = "bla"; Url = "test://bla" }
         let http = testHttpHead "5"
 
         // When
         let! res = Sofa.head db http 5 
         let rev, headers = res.Value
-       
 
         // Then
         rev |> should equal "1-5"
@@ -88,7 +101,7 @@ let ``basic head test`` () =
 let ``basic get test`` () =
     async {
         // Given
-        let db:Database = { Url = "test://bla" }
+        let db:Database = { Id = "bla"; Url = "test://bla" }
         let http, urlFuture = testHttpGet "{ \"value\": \"blaat\", \"_id\": 5, \"_rev\": \"5-1\" }" 
 
         // When
@@ -106,7 +119,7 @@ let ``basic get test`` () =
 let ``basic put test`` () =
     async {
         // Given
-        let db = { Url= "test://peer" }
+        let db = { Id = "peer"; Url= "test://peer" }
         let http, urlFuture, modelFuture = testHttpPut "{ \"id\": \"5\", \"rev\": \"1-5\", \"ok\": true }"
 
         // When
@@ -121,10 +134,28 @@ let ``basic put test`` () =
     } |> Async.RunSynchronously
 
 [<Fact>]
+let ``basic post test`` () =
+    async {
+        // Given
+        let db = { Id = "peer"; Url= "test://peer" }
+        let http, urlFuture, modelFuture = testHttpPost "{ \"id\": \"5\", \"rev\": \"1-5\", \"ok\": true }"
+
+        // When
+        let! res = Sofa.post db JsonConvert.SerializeObject http { value = "blaat"}
+        let id, rev = res.Value
+        
+        // Then
+        id |> should equal "5"
+        rev |> should equal "1-5"
+        urlFuture.Value |> should equal (Some "test://peer/")
+        modelFuture.Value |> should equal (Some "{\"value\":\"blaat\"}")
+    } |> Async.RunSynchronously
+    
+[<Fact>]
 let ``basic put test with id and rev`` () =
     async {
         // Given
-        let db = { Url= "test://peer" }
+        let db = { Id = "peer"; Url= "test://peer" }
         let http, urlFuture, modelFuture = testHttpPut "{ \"id\": \"5\", \"rev\": \"1-5\", \"ok\": true }"
 
         // When
@@ -143,7 +174,7 @@ let ``basic put test with id and rev`` () =
 let ``basic delete test`` () =
     async {
         // Given
-        let db = { Url= "test://peer" }
+        let db = { Id = "peer"; Url= "test://peer" }
         let http, urlFuture = testHttpDelete "{ \"id\": \"5\", \"rev\": \"1-5\", \"ok\": true }"
 
         // When
