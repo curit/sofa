@@ -87,7 +87,7 @@ type Server =
                 }
             get = fun s -> 
                 async {
-                    let! res = Http.AsyncRequest(url + s)
+                    let! res = Http.AsyncRequest(url + s, silentHttpErrors = true)
                     return
                         match res.StatusCode with
                         | 200 -> Some { Id = s; Url = url + s + "/" }
@@ -113,7 +113,7 @@ type Server =
                 }
             delete = fun s -> 
                 async {
-                    let! res = Http.AsyncRequest(url + s, httpMethod = "DELETE")
+                    let! res = Http.AsyncRequest(url + s, httpMethod = "DELETE", silentHttpErrors = true)
                     return 
                         match res.StatusCode with 
                         | 200 | 404 -> true
@@ -211,7 +211,7 @@ module Sofa =
 
         let getReq url = 
             async {
-                let! res = Http.AsyncRequest url
+                let! res = Http.AsyncRequest (url, silentHttpErrors = true)
 
                 return 
                     match res.StatusCode with 
@@ -230,7 +230,7 @@ module Sofa =
 
         let deleteReq url rev =
             async {
-                let! res = Http.AsyncRequest (url, query = ["rev", rev], httpMethod = "DELETE")
+                let! res = Http.AsyncRequest (url, query = ["rev", rev], httpMethod = "DELETE", silentHttpErrors = true)
                 return 
                     match res.StatusCode with
                     | 200 | 202 ->
@@ -249,7 +249,7 @@ module Sofa =
 
         let putReq url model = 
             async {
-                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "PUT")
+                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "PUT", silentHttpErrors = true)
                 return 
                     match res.StatusCode with
                     | 201 | 202 -> 
@@ -267,7 +267,7 @@ module Sofa =
 
         let postReq url model = 
             async {
-                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "POST")
+                let! res = Http.AsyncRequest (url, headers = ["content-type", "application/json"], body = TextRequest(model), httpMethod = "POST", silentHttpErrors = true)
                 return 
                     match res.StatusCode with
                     | 201 | 202 -> 
