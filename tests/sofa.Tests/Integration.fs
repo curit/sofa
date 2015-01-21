@@ -4,6 +4,11 @@ open Xunit
 open FsUnit.Xunit
 open Newtonsoft.Json
 
+type Test = 
+    {
+        value: string
+    }
+
 type Integration () =
 
     do 
@@ -12,6 +17,7 @@ type Integration () =
             |> Async.RunSynchronously 
             |> Seq.filter (fun s -> not (s.Id.StartsWith("_")))
             |> Seq.iter (fun s -> server.delete s.Id |> Async.RunSynchronously |> ignore)
+            
 
     [<Fact>]
     let ``should be able to create a database`` () =
@@ -49,6 +55,27 @@ type Integration () =
         } |> Async.RunSynchronously
 
     [<Fact>]
+    let ``should be able to put and get a doc to a database`` () =
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "test-2"
+            let seatedsofa = Sofa.build<Test> db.Value
+
+            // When
+            let! result = seatedsofa.put ("SpagettiWithMeatballs", None) { value = "test" }
+            let id, rev = result.Value
+
+            let! head = seatedsofa.head "SpagettiWithMeatballs"
+            let headId, headers = head.Value
+
+            // Then 
+            id |> should equal "SpagettiWithMeatballs"
+            rev |> should not' (be NullOrEmptyString)
+            headId |> should equal rev
+        } |> Async.RunSynchronously
+
+    [<Fact>]
     let ``should be able to get all databases`` () = 
         async {
             // Given
@@ -67,4 +94,19 @@ type Integration () =
             all |> should contain "one"
             all |> should contain "two"
             all |> should contain "three"
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should return none for a non existant document`` ()=
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "test-3"
+            let seatedsofa = Sofa.build db.Value
+            
+            // When
+            let! head = seatedsofa.head "DoesntExists"
+            
+            // Then
+            head |> should equal None
         } |> Async.RunSynchronously

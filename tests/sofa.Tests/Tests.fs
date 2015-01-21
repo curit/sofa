@@ -33,7 +33,7 @@ let testHttpHead ret =
         async {
             return
                 [
-                    ("E-Tag", ["1-" + ret])
+                    ("ETag", ["1-" + ret])
                 ] |> Map.ofList |> Some
         }
 
@@ -94,7 +94,7 @@ let ``basic head test`` () =
 
         // Then
         rev |> should equal "1-5"
-        (headers |> Map.toList).[0] |> should equal ("E-Tag", ["1-5"])
+        (headers |> Map.toList).[0] |> should equal ("ETag", ["1-5"])
     } |> Async.RunSynchronously
 
 [<Fact>]

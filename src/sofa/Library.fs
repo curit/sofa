@@ -149,7 +149,10 @@ module Sofa =
             let! headers = http (sprintf "%s%O" (db.NormalizeUrl ()) id)
             return 
                 match headers with 
-                | Some h -> Some (h.["E-Tag"] |> List.head, h)
+                | Some h -> 
+                    let rev = (h.["ETag"] |> List.head).Replace("\"", "")
+                    Some (rev, h)
+
                 | None -> None
         }
 
@@ -197,7 +200,7 @@ module Sofa =
     let build<'a> db = 
         let headReq url =
             async { 
-                let! res = Http.AsyncRequest (url, httpMethod = "HEAD")
+                let! res = Http.AsyncRequest (url, httpMethod = "HEAD", silentHttpErrors = true)
                 return 
                     match res.StatusCode with 
                     | 200 | 304 -> Some (res.Headers  |> mapHeaders)
@@ -282,11 +285,11 @@ module Sofa =
             }
         
         {
-            get = get db defaultDeserialzer getReq
+            get = get<'a> db defaultDeserialzer getReq
             head = head db headReq
-            put = put db defaultSerializer putReq 
+            put = put<'a> db defaultSerializer putReq 
             delete = delete db deleteReq
-            post = post db JsonConvert.SerializeObject postReq
+            post = post<'a> db JsonConvert.SerializeObject postReq
         }
 
     
