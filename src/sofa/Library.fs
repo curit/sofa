@@ -103,7 +103,7 @@ type Server =
                 }
             put = fun s -> 
                 async {
-                    let! res = Http.AsyncRequest(url + s, httpMethod = "PUT")
+                    let! res = Http.AsyncRequest(url + s, httpMethod = "PUT", silentHttpErrors = true)
                     return 
                         match res.StatusCode with 
                         | 201 | 412 -> Some { Id = s; Url = url + s + "/" }
