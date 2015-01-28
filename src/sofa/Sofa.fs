@@ -163,6 +163,11 @@ module Sofa =
             put = put<'a> db defaultSerializer putReq 
             delete = delete db deleteReq
             post = post<'a> db JsonConvert.SerializeObject postReq
+            _design = 
+                {
+                    get = get<DesignDoc> db defaultDeserialzer getReq
+                    head = head db headReq
+                    put = put<DesignDoc> db defaultSerializer putReq 
+                    delete = delete db deleteReq
+                }
         }
-
-    

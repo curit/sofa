@@ -2,11 +2,15 @@
 open sofa
 open Xunit
 open FsUnit.Xunit
-open Newtonsoft.Json
 
 type Test = 
     {
         value: string
+    }
+
+type AnotherTest = 
+    {
+        value: int
     }
 
 type Integration () =
@@ -109,4 +113,21 @@ type Integration () =
             
             // Then
             head |> should equal None
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should be able to put a new design-doc with a view`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test"
+            let seatedsofa = Sofa.build db.Value
+ 
+            // When           
+            let! result = seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.value % 2 === 0) { emit(doc.value, 1); } }" } )] |> Map.ofList }
+            let id, rev = result.Value
+
+            // Then
+            id |> should equal "_design/test"
+            rev |> should not' (be NullOrEmptyString)
         } |> Async.RunSynchronously
