@@ -27,6 +27,20 @@ type DesignDoc = {
     views: Map<string, View>
 }
 
+type QueryResponse<'a> = {
+    offset: int
+    rows: 'a seq
+    total_rows: int
+}
+
+type IncludedDoc<'a> = {
+    doc: 'a
+}
+
+type QueryResponseIncludedDocs<'a> = {
+    rows: IncludedDoc<'a> seq
+}
+
 type Database = 
     {
         Id: string
@@ -37,11 +51,11 @@ type Database =
         | '/' -> x.Url
         | _ -> x.Url + "/"
 
-type SofaView<'key, 'a, 'doc> = {
-    all: (int * int) option -> (int * int * 'a seq)
-    allIncludeDocs: (int * int) option -> (int * int * ('a * 'doc) seq)  
-    keys: ('key list * (int * int) option) -> (int * int * 'a seq)
-    keysIncludeDocs: ('key list * (int * int) option) -> (int * int * ('a * 'doc) seq)
+type SofaView<'a, 'doc, 'key> = {
+    all: (int * int) option -> (int * int * 'a seq) option Async
+    allIncludeDocs: (int * int) option -> (int * int * ('a * 'doc) seq) option Async  
+    keys: 'key list -> (int * int) option -> (int * int * 'a seq) option Async
+    keysIncludeDocs: 'key list -> (int * int) option -> (int * int * ('a * 'doc) seq) option Async
 }
 
 type C683 = 

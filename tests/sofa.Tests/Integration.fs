@@ -10,6 +10,12 @@ type Test =
 
 type AnotherTest = 
     {
+        intvalue: int
+    }
+
+type QueryResult = 
+    {
+        key: int
         value: int
     }
 
@@ -130,4 +136,153 @@ type Integration () =
             // Then
             id |> should equal "_design/test"
             rev |> should not' (be NullOrEmptyString)
+        } |> Async.RunSynchronously
+
+    
+    [<Fact>]
+    let ``should be able get the result of a view`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test-2"
+            let seatedsofa = Sofa.build<AnotherTest> db.Value
+            do! seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.intvalue % 2 === 0) { emit(doc.intvalue, 1); } }" } )] |> Map.ofList } |> Async.Ignore
+            
+            do! [ { intvalue = 1 }; { intvalue = 2 }; { intvalue = 3 }; { intvalue = 4 }; { intvalue = 5 }; { intvalue = 6 } ] 
+                |> Seq.map (fun v -> seatedsofa.post v)
+                |> Async.Parallel
+                |> Async.Ignore
+            
+            let query = Sofa.buildQuery<QueryResult, AnotherTest, int> db.Value "_design/test" "test-view"
+            
+            // When
+            let! result = query.all None
+            let offset, total_rows, res = result.Value
+
+            // Then
+            total_rows |> should equal 3
+            offset |> should equal 0
+            res |> Seq.iter (fun t -> t.key % 2 |> should equal 0)
+
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should be able get the result of a view including the docs`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test-2"
+            let seatedsofa = Sofa.build<AnotherTest> db.Value
+            do! seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.intvalue % 2 === 0) { emit(doc.intvalue, 1); } }" } )] |> Map.ofList } |> Async.Ignore
+            
+            do! [ { intvalue = 1 }; { intvalue = 2 }; { intvalue = 3 }; { intvalue = 4 }; { intvalue = 5 }; { intvalue = 6 } ] 
+                |> Seq.map (fun v -> seatedsofa.post v)
+                |> Async.Parallel
+                |> Async.Ignore
+            
+            let query = Sofa.buildQuery<QueryResult, AnotherTest, int> db.Value "_design/test" "test-view"
+            
+            // When
+            let! result = query.allIncludeDocs None
+            let offset, total_rows, res = result.Value
+
+            // Then
+            total_rows |> should equal 3
+            offset |> should equal 0
+            res |> Seq.iter (
+                fun (kv, doc) -> 
+                    kv.key % 2 |> should equal 0
+                    kv.key |> should equal doc.intvalue
+            )
+
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should be able get the result of a view including the docs skip one limit two`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test-2"
+            let seatedsofa = Sofa.build<AnotherTest> db.Value
+            do! seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.intvalue % 2 === 0) { emit(doc.intvalue, 1); } }" } )] |> Map.ofList } |> Async.Ignore
+            
+            do! [ { intvalue = 1 }; { intvalue = 2 }; { intvalue = 3 }; { intvalue = 4 }; { intvalue = 5 }; { intvalue = 6 } ] 
+                |> Seq.map (fun v -> seatedsofa.post v)
+                |> Async.Parallel
+                |> Async.Ignore
+            
+            let query = Sofa.buildQuery<QueryResult, AnotherTest, int> db.Value "_design/test" "test-view"
+            
+            // When
+            let! result = query.allIncludeDocs (Some (1, 2))
+            let offset, total_rows, res = result.Value
+
+            // Then
+            total_rows |> should equal 3
+            offset |> should equal 1
+            res |> Seq.length |> should equal 2
+            res |> Seq.iter (
+                fun (kv, doc) -> 
+                    kv.key |> should not' (equal 2)
+                    kv.key % 2 |> should equal 0
+                    kv.key |> should equal doc.intvalue
+            )
+
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should be able get the result of a view by key`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test-2"
+            let seatedsofa = Sofa.build<AnotherTest> db.Value
+            do! seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.intvalue % 2 === 0) { emit(doc.intvalue, 1); } }" } )] |> Map.ofList } |> Async.Ignore
+            
+            do! [ { intvalue = 1 }; { intvalue = 2 }; { intvalue = 3 }; { intvalue = 4 }; { intvalue = 5 }; { intvalue = 6 } ] 
+                |> Seq.map (fun v -> seatedsofa.post v)
+                |> Async.Parallel
+                |> Async.Ignore
+            
+            let query = Sofa.buildQuery<QueryResult, AnotherTest, int> db.Value "_design/test" "test-view"
+            
+            // When
+            let! result = query.keys [4] None
+            let offset, total_rows, res = result.Value
+
+            // Then
+            total_rows |> should equal 3
+            offset |> should equal 1
+            res |> Seq.length |> should equal 1
+            (res |> Seq.head).key |> should equal 4
+
+        } |> Async.RunSynchronously
+
+    [<Fact>]
+    let ``should be able get the result of a view by mutliple keys`` () = 
+        async {
+            // Given
+            let server = Server.build "http://localhost:5984"
+            let! db = server.put "design-doc-test-2"
+            let seatedsofa = Sofa.build<AnotherTest> db.Value
+            do! seatedsofa._design.put ("_design/test", None) { views = [("test-view", { map = "function (doc) { if (doc.intvalue % 2 === 0) { emit(doc.intvalue, 1); } }" } )] |> Map.ofList } |> Async.Ignore
+            
+            do! [ { intvalue = 1 }; { intvalue = 2 }; { intvalue = 3 }; { intvalue = 4 }; { intvalue = 5 }; { intvalue = 6 } ] 
+                |> Seq.map (fun v -> seatedsofa.post v)
+                |> Async.Parallel
+                |> Async.Ignore
+            
+            let query = Sofa.buildQuery<QueryResult, AnotherTest, int> db.Value "_design/test" "test-view"
+            
+            // When
+            let! result = query.keys [4;6] None
+            let offset, total_rows, res = result.Value
+
+            // Then
+            total_rows |> should equal 3
+            offset |> should equal 1
+            res |> Seq.length |> should equal 2
+            (res |> Seq.head).key |> should equal 4
+            (res |> Seq.last).key |> should equal 6
+
         } |> Async.RunSynchronously

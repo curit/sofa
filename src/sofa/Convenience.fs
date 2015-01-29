@@ -31,3 +31,13 @@ module Convenience =
             rev.ToString(Formatting.None)
         | None -> 
             model.ToString(Formatting.None)
+
+    let queryDeserializer<'a> str = 
+        let offsetRows = JsonConvert.DeserializeObject<QueryResponse<'a>>(str)
+        (offsetRows.offset, offsetRows.total_rows, offsetRows.rows)
+
+    let queryDeserializerIncludedDocs<'a, 'b> str = 
+        let offsetRows = JsonConvert.DeserializeObject<QueryResponse<'a>>(str)
+        let includedDocs = JsonConvert.DeserializeObject<QueryResponseIncludedDocs<'b>>(str)
+        let result = (includedDocs.rows |> Seq.map (fun d -> d.doc)) |> Seq.zip offsetRows.rows 
+        (offsetRows.offset, offsetRows.total_rows, result)
