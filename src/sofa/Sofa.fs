@@ -35,8 +35,7 @@ module Sofa =
             let! resp = http (sprintf "%s%O" (db.NormalizeUrl()) id) (ser (id, rev) model)
             return 
                 match resp with 
-                | Some x -> 
-                    let putResult, headers = x 
+                | Some (putResult, headers) -> 
                     let putResult = putResult |> resultDeserializer
 
                     Some (putResult.id, putResult.rev)
@@ -95,6 +94,10 @@ module Sofa =
                 | Some (skip, limit) -> 
                     [ ("skip", skip |> string); ("limit", limit |> string); ("include_docs", "true") ]
                 | None -> [ ("include_docs", "true") ]
+                
+            let query = if keys.Length > 1 then ("keys", JsonConvert.SerializeObject(keys)) :: query else query
+            
+            let query = if keys.Length = 1 then ("key", JsonConvert.SerializeObject(keys |> List.head)) :: query else query
 
             let! resp = http (sprintf "%s%s/_view/%s" (db.NormalizeUrl ()) designdoc viewname) query
             return 
