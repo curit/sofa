@@ -63,41 +63,20 @@ module Sofa =
                 match resp with 
                 | Some (deleteResult, headers) -> 
                     let deleteResult = deleteResult |> resultDeserializer
-
                     Some (deleteResult.id, deleteResult.rev)
                 | None -> None
         }
 
-    let query<'a, 'key> (db:Database) (queryDeserializer:string -> (int * int * 'a seq)) designdoc viewname http (keys: 'key list) (skipLimit: (int*int) option) =
+    let query (db:Database) queryDeserializer designdoc viewname http includeDocs (keys: 'key list) (skipLimit: (int*int) option) =
         async {
             let query = 
                 match skipLimit with 
                 | Some (skip, limit) -> 
-                    [ ("skip", skip |> string); ("limit", limit |> string) ]
-                | None -> List.empty
-
-            let query = if keys.Length > 1 then ("keys", JsonConvert.SerializeObject(keys)) :: query else query
-            
-            let query = if keys.Length = 1 then ("key", JsonConvert.SerializeObject(keys |> List.head)) :: query else query
-
-            let! resp = http (sprintf "%s%s/_view/%s" (db.NormalizeUrl ()) designdoc viewname) query
-            return 
-                match resp with 
-                | Some (res, headers) -> Some (queryDeserializer res)
-                | None -> None
-        }
-
-    let queryInlcudeDocs<'a, 'b, 'key> (db:Database) (queryDeserializer:string -> (int * int * ('a * 'b) seq)) designdoc viewname http (keys: 'key list) (skipLimit: (int*int) option) =
-        async {
-            let query = 
-                match skipLimit with 
-                | Some (skip, limit) -> 
-                    [ ("skip", skip |> string); ("limit", limit |> string); ("include_docs", "true") ]
-                | None -> [ ("include_docs", "true") ]
-                
-            let query = if keys.Length > 1 then ("keys", JsonConvert.SerializeObject(keys)) :: query else query
-            
-            let query = if keys.Length = 1 then ("key", JsonConvert.SerializeObject(keys |> List.head)) :: query else query
+                    [ ("skip", skip |> string); ("limit", limit |> string)]
+                | None -> []
+                |> condCons includeDocs (fun () -> ("include_docs", "true"))
+                |> condCons (keys.Length > 1) (fun () -> ("keys", JsonConvert.SerializeObject(keys)))
+                |> condCons (keys.Length = 1) (fun () -> ("key", JsonConvert.SerializeObject(keys |> List.head)))
 
             let! resp = http (sprintf "%s%s/_view/%s" (db.NormalizeUrl ()) designdoc viewname) query
             return 
@@ -127,10 +106,10 @@ module Sofa =
             }
     
         {
-            all = query<'a, 'key> db queryDeserializer<'a> designdoc viewname getReq []
-            allIncludeDocs = queryInlcudeDocs<'a, 'obj, 'key> db queryDeserializerIncludedDocs<'a, 'obj> designdoc viewname getReq []
-            keys = query<'a, 'key> db queryDeserializer<'a> designdoc viewname getReq 
-            keysIncludeDocs = queryInlcudeDocs<'a, 'obj, 'key> db queryDeserializerIncludedDocs<'a, 'obj> designdoc viewname getReq 
+            all = query db queryDeserializer<'a> designdoc viewname getReq false []
+            allIncludeDocs = query db queryDeserializerIncludedDocs<'a, 'obj> designdoc viewname getReq true []
+            keys = query db queryDeserializer<'a> designdoc viewname getReq false
+            keysIncludeDocs = query db queryDeserializerIncludedDocs<'a, 'obj> designdoc viewname getReq true
         } 
     
                  

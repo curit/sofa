@@ -13,6 +13,7 @@ module Convenience =
                         |> Seq.filter (not << String.IsNullOrWhiteSpace)
                         |> Seq.toList
                     )
+    let condCons predicate head tail = if predicate then head() :: tail else tail
 
     let defaultDeserialzer str: (string * string * 'a) =
         let model = JsonConvert.DeserializeObject<'a>(str)
