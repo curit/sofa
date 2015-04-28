@@ -28,6 +28,19 @@ let testHttpGet ret =
 
     (returnResult, future)
 
+let testHttpGetQuery ret = 
+    let future = Future ()
+    let queryFuture = Future<(string * string) list> ()
+
+    let returnResult str query = 
+        async {
+            future.Resolve str |> ignore
+            queryFuture.Resolve query |> ignore
+            return Some (ret, Map.empty) 
+        }
+
+    (returnResult, future, queryFuture)
+
 let testHttpHead ret = 
     let returnResult str = 
         async {
@@ -185,6 +198,19 @@ let ``basic delete test`` () =
         id |> should equal "5"
         rev |> should equal "1-5"
         urlFuture.Value |> should equal (Some "test://peer/5?rev=1-5")
+    } |> Async.RunSynchronously
+
+[<Fact>]
+let ``query should generate correct urls`` () = 
+    async {
+        let db = { Id = "apple"; Url = "test://plop" }
+        let http, urlFuture, queryFuture = testHttpGetQuery "{}" 
+
+        let! res = Sofa.query db (fun str -> ()) "test" "test" http true ["key1"; "key2"] (Some(1,5)) 
+        
+        res.IsSome |> should be True
+        urlFuture.Value |> should equal (Some "test://plop/test/_view/test")
+        queryFuture.Value.Value |> should equal [ ("keys", "[\"key1\",\"key2\"]"); ("include_docs", "true"); ("skip", "1"); ("limit", "5") ]
     } |> Async.RunSynchronously
 
 [<Fact>]
